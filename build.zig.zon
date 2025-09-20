@@ -2,6 +2,6 @@
     .name = .RGFW,
     .version = "0.0.1",
     .minimum_zig_version = "0.15.1",
-    .paths = .{"build.zig", "build.zig.zon", "root.zig", "RGFW.h"},
+    .paths = .{"build.zig", "build.zig.zon", "root.zig", "RGFW.h", "xdg"},
     .fingerprint = 0x66b9afa48b4fded4,
 }

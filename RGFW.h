@@ -306,6 +306,9 @@ int main() {
 	#define RGFW_NO_PASSTHROUGH
 #endif
 
+#define RGFW_IMPLEMENTATION
+#define RGFW_WAYLAND
+
 #if defined(RGFW_EXPORT) ||  defined(RGFW_IMPORT)
 	#if defined(_WIN32)
 		#if defined(__TINYC__) && (defined(RGFW_EXPORT) ||  defined(RGFW_IMPORT))
@@ -6842,7 +6845,7 @@ RGFW_bool RGFW_FUNC(RGFW_createSurfacePtr) (u8* data, i32 w, i32 h, RGFW_format 
 	}
 
 	surface->native.buffer = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-	if (surface->native.buffer == MAP_FAILED) {
+	if (surface->native.buffer == 0xffffffff /* MAP_FAILED */) {
 		RGFW_sendDebugInfo(RGFW_typeError, RGFW_errBuffer, "mmap failed.");
 		return RGFW_FALSE;
 	}
