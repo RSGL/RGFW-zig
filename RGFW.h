@@ -6251,9 +6251,11 @@ static void RGFW_wl_xdg_toplevel_close_handler(void* data, struct xdg_toplevel *
 	RGFW_UNUSED(toplevel);
 	RGFW_window* win = (RGFW_window*)data;
 
-	RGFW_eventQueuePushEx(e.type = RGFW_quit; e.common.win = win);
-	RGFW_window_setShouldClose(win, RGFW_TRUE);
-	RGFW_windowQuitCallback(win);
+	if (!win->internal.shouldClose) {
+		RGFW_eventQueuePushEx(e.type = RGFW_quit; e.common.win = win);
+		RGFW_window_setShouldClose(win, RGFW_TRUE);
+		RGFW_windowQuitCallback(win);
+	}
 }
 
 static void RGFW_wl_xdg_decoration_configure_handler(void* data,
@@ -7528,7 +7530,7 @@ WGPUSurface RGFW_FUNC(RGFW_window_createSurface_WebGPU) (RGFW_window* window, WG
 #define WM_DPICHANGED       0x02E0
 #endif
 
-char* RGFW_createUTF8FromWideStringWin32(const WCHAR* source);
+RGFW_bool RGFW_createUTF8FromWideStringWin32(const WCHAR* source, char* out, size_t max);
 
 #define GL_FRONT				0x0404
 #define GL_BACK					0x0405
@@ -7985,10 +7987,7 @@ LRESULT CALLBACK WndProcW(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 				DragQueryFileW(drop, i, buffer, length + 1);
 
-				char* str = RGFW_createUTF8FromWideStringWin32(buffer);
-				if (str != NULL)
-					RGFW_MEMCPY(event.drop.files[i], str, length + 1);
-
+				RGFW_createUTF8FromWideStringWin32(buffer, event.drop.files[i], RGFW_MAX_PATH);
 
 				event.drop.files[i][RGFW_MAX_PATH - 1] = '\0';
 				event.common.win = win;
@@ -8559,51 +8558,49 @@ RGFW_bool RGFW_window_isMaximized(RGFW_window* win) {
 
 typedef struct { int iIndex; HMONITOR hMonitor; RGFW_monitor* monitors; } RGFW_mInfo;
 #ifndef RGFW_NO_MONITOR
-RGFW_monitor win32CreateMonitor(HMONITOR src);
-RGFW_monitor win32CreateMonitor(HMONITOR src) {
+RGFW_monitor RGFW_win32_createMonitor(HMONITOR src);
+RGFW_monitor RGFW_win32_createMonitor(HMONITOR src) {
 	RGFW_monitor monitor;
-	MONITORINFOEX  monitorInfo;
+	RGFW_MEMSET(&monitor, 0, sizeof(monitor));
 
-	monitorInfo.cbSize = sizeof(MONITORINFOEX);
-	GetMonitorInfoA(src, (LPMONITORINFO)&monitorInfo);
+	MONITORINFOEXW monitorInfo;
+	monitorInfo.cbSize = sizeof(MONITORINFOEXW);
+	GetMonitorInfoW(src, (LPMONITORINFO)&monitorInfo);
 
 	/* get the monitor's index */
-	DISPLAY_DEVICEA dd;
+	DISPLAY_DEVICEW dd;
 	dd.cb = sizeof(dd);
 
     DWORD deviceNum;
-	for (deviceNum = 0; EnumDisplayDevicesA(NULL, deviceNum, &dd, 0); deviceNum++) {
+	for (deviceNum = 0; EnumDisplayDevicesW(NULL, deviceNum, &dd, 0); deviceNum++) {
 		if (!(dd.StateFlags & DISPLAY_DEVICE_ACTIVE))
 			continue;
 
-		DEVMODEA dm;
+		DEVMODEW dm;
 		ZeroMemory(&dm, sizeof(dm));
 		dm.dmSize = sizeof(dm);
 
-		if (EnumDisplaySettingsA(dd.DeviceName, ENUM_CURRENT_SETTINGS, &dm)) {
+		if (EnumDisplaySettingsW(dd.DeviceName, ENUM_CURRENT_SETTINGS, &dm)) {
 			monitor.mode.refreshRate = dm.dmDisplayFrequency;
 			RGFW_splitBPP(dm.dmBitsPerPel, &monitor.mode);
 		}
 
-		DISPLAY_DEVICEA mdd;
+		DISPLAY_DEVICEW mdd;
 		mdd.cb = sizeof(mdd);
 
-		if (EnumDisplayDevicesA(dd.DeviceName, (DWORD)deviceNum, &mdd, 0)) {
-			RGFW_STRNCPY(monitor.name, mdd.DeviceString, sizeof(monitor.name) - 1);
+		if (EnumDisplayDevicesW(dd.DeviceName, (DWORD)deviceNum, &mdd, 0)) {
+			RGFW_createUTF8FromWideStringWin32(mdd.DeviceString, monitor.name, sizeof(monitor.name));
 			monitor.name[sizeof(monitor.name) - 1] = '\0';
 			break;
 		}
 	}
-
-
-
 
 	monitor.x = monitorInfo.rcWork.left;
 	monitor.y = monitorInfo.rcWork.top;
 	monitor.mode.w = (i32)(monitorInfo.rcMonitor.right - monitorInfo.rcMonitor.left);
 	monitor.mode.h = (i32)(monitorInfo.rcMonitor.bottom - monitorInfo.rcMonitor.top);
 
-	HDC hdc = CreateDC(monitorInfo.szDevice, NULL, NULL, NULL);
+	HDC hdc = CreateDCW(monitorInfo.szDevice, NULL, NULL, NULL);
 	/* get pixels per inch */
 	float dpiX = (float)GetDeviceCaps(hdc, LOGPIXELSX);
 	float dpiY = (float)GetDeviceCaps(hdc, LOGPIXELSX);
@@ -8646,7 +8643,7 @@ BOOL CALLBACK GetMonitorHandle(HMONITOR hMonitor, HDC hdcMonitor, LPRECT lprcMon
 	if (info->iIndex >= 6)
 		return FALSE;
 
-	info->monitors[info->iIndex] = win32CreateMonitor(hMonitor);
+	info->monitors[info->iIndex] = RGFW_win32_createMonitor(hMonitor);
 	info->iIndex++;
 
 	return TRUE;
@@ -8654,9 +8651,9 @@ BOOL CALLBACK GetMonitorHandle(HMONITOR hMonitor, HDC hdcMonitor, LPRECT lprcMon
 
 RGFW_monitor RGFW_getPrimaryMonitor(void) {
 	#ifdef __cplusplus
-	return win32CreateMonitor(MonitorFromPoint({0, 0}, MONITOR_DEFAULTTOPRIMARY));
+	return RGFW_win32_createMonitor(MonitorFromPoint({0, 0}, MONITOR_DEFAULTTOPRIMARY));
 	#else
-	return win32CreateMonitor(MonitorFromPoint((POINT){0, 0}, MONITOR_DEFAULTTOPRIMARY));
+	return RGFW_win32_createMonitor(MonitorFromPoint((POINT){0, 0}, MONITOR_DEFAULTTOPRIMARY));
 	#endif
 }
 
@@ -8674,7 +8671,7 @@ RGFW_monitor* RGFW_getMonitors(size_t* len) {
 
 RGFW_monitor RGFW_window_getMonitor(RGFW_window* win) {
 	HMONITOR src = MonitorFromWindow(win->src.window, MONITOR_DEFAULTTOPRIMARY);
-	return win32CreateMonitor(src);
+	return RGFW_win32_createMonitor(src);
 }
 
 RGFW_bool RGFW_monitor_requestMode(RGFW_monitor mon, RGFW_monitorMode mode, RGFW_modeRequest request) {
@@ -9082,6 +9079,8 @@ void RGFW_win32_loadOpenGLFuncs(HWND dummyWin) {
 #define WGL_FRAMEBUFFER_SRGB_CAPABLE_ARB             0x20A9
 
 RGFW_bool RGFW_window_createContextPtr_OpenGL(RGFW_window* win, RGFW_glContext* ctx, RGFW_glHints* hints) {
+	const char flushControl[] = "WGL_ARB_context_flush_control";
+
 	win->src.ctx.native = ctx;
 	win->src.gfxType = RGFW_gfxNativeOpenGL;
 
@@ -9174,10 +9173,12 @@ RGFW_bool RGFW_window_createContextPtr_OpenGL(RGFW_window* win, RGFW_glContext* 
 
 		SET_ATTRIB(WGL_CONTEXT_OPENGL_NO_ERROR_ARB, hints->noError);
 
-		if (hints->releaseBehavior == RGFW_glReleaseFlush) {
-			SET_ATTRIB(0x2097, WGL_CONTEXT_RELEASE_BEHAVIOR_FLUSH_ARB); // WGL_CONTEXT_RELEASE_BEHAVIOR_ARB
-		} else if (hints->releaseBehavior == RGFW_glReleaseNone) {
-			SET_ATTRIB(0x2097, 0x0000); // WGL_CONTEXT_RELEASE_BEHAVIOR_NONE_ARB
+		if (RGFW_extensionSupportedPlatform_OpenGL(flushControl, sizeof(flushControl))) {
+			if (hints->releaseBehavior == RGFW_glReleaseFlush) {
+				SET_ATTRIB(0x2097, WGL_CONTEXT_RELEASE_BEHAVIOR_FLUSH_ARB); // WGL_CONTEXT_RELEASE_BEHAVIOR_ARB
+			} else if (hints->releaseBehavior == RGFW_glReleaseNone) {
+				SET_ATTRIB(0x2097, 0x0000); // WGL_CONTEXT_RELEASE_BEHAVIOR_NONE_ARB
+			}
 		}
 
 		i32 flags = 0;
@@ -9234,27 +9235,25 @@ void RGFW_window_swapInterval_OpenGL(RGFW_window* win, i32 swapInterval) {
 }
 #endif
 
-char* RGFW_createUTF8FromWideStringWin32(const WCHAR* source) {
-	static char target[RGFW_MAX_PATH * 2];
+RGFW_bool RGFW_createUTF8FromWideStringWin32(const WCHAR* source, char* output, size_t max) {
     i32 size = 0;
     if (source == NULL) {
-        return NULL;
+        return RGFW_FALSE;
 	}
 	size = WideCharToMultiByte(CP_UTF8, 0, source, -1, NULL, 0, NULL, NULL);
 	if (!size) {
-		return NULL;
+		return RGFW_FALSE;
 	}
 
-	if (size > RGFW_MAX_PATH * 2)
-		size = RGFW_MAX_PATH * 2;
+	if (size > (i32)max)
+		size = (i32)max;
 
-	target[size] = 0;
-
-	if (!WideCharToMultiByte(CP_UTF8, 0, source, -1, target, size, NULL, NULL)) {
-		return NULL;
+	if (!WideCharToMultiByte(CP_UTF8, 0, source, -1, output, size, NULL, NULL)) {
+		return RGFW_FALSE;
 	}
 
-	return target;
+	output[size] = 0;
+	return RGFW_TRUE;
 }
 
 #ifdef RGFW_WEBGPU
