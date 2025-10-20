@@ -3912,8 +3912,9 @@ i32 RGFW_initPlatform(void) {
 #ifdef RGFW_X11
 	RGFW_load_X11();
 	return RGFW_initPlatform_X11();
-#endif
+#else
 	return 0;
+#endif
 }
 
 

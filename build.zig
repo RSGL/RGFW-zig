@@ -8,17 +8,20 @@ pub fn build(b: *std.Build) void {
     const wayland = b.option(bool, "wayland", "enables wayland") orelse false;
     const vulkan = b.option(bool, "vulkan", "enables vulkan") orelse false;
 
-    const mod = b.addModule("RGFW", .{
+    const cRGFW = b.addTranslateC(.{
+        .link_libc = true,
         .target = target,
         .optimize = optimize,
-        .link_libc = true,
-        .root_source_file = b.path("root.zig")
+        .root_source_file = b.path("RGFW.h")
     });
-    mod.addIncludePath(b.path("."));
+    cRGFW.addIncludePath(b.path("."));
 
-    if (opengl) mod.addCMacro("RGFW_OPENGL", "");
-    if (wayland) mod.addCMacro("RGFW_WAYLAND", "");
-    if (vulkan) mod.addCMacro("RGFW_VULKAN", "");
+    cRGFW.defineCMacro("RGFW_IMPLEMENTATION", "");
+    if (opengl) cRGFW.defineCMacro("RGFW_OPENGL", "");
+    if (wayland) cRGFW.defineCMacro("RGFW_WAYLAND", "");
+    if (vulkan) cRGFW.defineCMacro("RGFW_VULKAN", "");
+
+    const mod = cRGFW.addModule("RGFW");
     
     switch (target.result.os.tag) {
         .linux, .freebsd, .openbsd, .dragonfly => {
