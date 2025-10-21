@@ -1,6 +1,6 @@
 .{
     .name = .RGFW,
-    .version = "1.8.0-dev",
+    .version = "1.8.0-rc",
     .minimum_zig_version = "0.15.1",
     .paths = .{"build.zig", "build.zig.zon", "RGFW.h", "xdg"},
     .fingerprint = 0x66b9afa48b4fded4,
