@@ -7781,7 +7781,7 @@ static void RGFW_xdg_output_logical_size(void *data, struct zxdg_output_v1 *zxdg
 }
 
 static void RGFW_wl_create_outputs(struct wl_registry *const registry, uint32_t id) {
-	struct wl_output *output = wl_registry_bind(registry, id, &wl_output_interface, 4);
+	struct wl_output *output = wl_registry_bind(registry, id, &wl_output_interface, wl_display_get_version(_RGFW->wl_display) < 4 ? 3 : 4);
 	RGFW_monitorNode* node;
 	RGFW_monitor mon;
 
@@ -9616,10 +9616,10 @@ void RGFW_window_setFullscreen(RGFW_window* win, RGFW_bool fullscreen) {
 	RGFW_monitor mon  = RGFW_window_getMonitor(win);
 	RGFW_window_setBorder(win, 0);
 
-    SetWindowPos(win->src.window, HWND_TOPMOST, 0, 0, (i32)mon.mode.w, (i32)mon.mode.h, SWP_NOOWNERZORDER | SWP_FRAMECHANGED | SWP_SHOWWINDOW);
+    SetWindowPos(win->src.window, HWND_TOPMOST, (i32)mon.x, (i32)mon.x, (i32)mon.mode.w, (i32)mon.mode.h, SWP_NOOWNERZORDER | SWP_FRAMECHANGED | SWP_SHOWWINDOW);
     RGFW_monitor_scaleToWindow(mon, win);
 
-	win->x = 0; win->y = 0;
+	win->x = mon.x; win->y = mon.x;
 	win->w = mon.mode.w;
 	win->h = mon.mode.h;
 }
@@ -11845,13 +11845,13 @@ void RGFW_window_setFullscreen(RGFW_window* win, RGFW_bool fullscreen) {
 		win->internal.oldW = win->w;
 		win->internal.oldH = win->h;
 		RGFW_monitor mon = RGFW_window_getMonitor(win);
-		win->x = 0;
-		win->y = 0;
-		win->w = mon.x;
-		win->h = mon.y;
+		win->x = mon.x;
+		win->y = mon.y;
+		win->w = mon.mode.w;
+		win->h = mon.mode.h;
 		win->internal.flags |= RGFW_windowFullscreen;
 		RGFW_window_resize(win, mon.mode.w, mon.mode.h);
-		RGFW_window_move(win, 0, 0);
+		RGFW_window_move(win, mon.x, mon.y);
 	}
 	objc_msgSend_void_SEL(win->src.window, sel_registerName("toggleFullScreen:"), NULL);
 
@@ -13707,3 +13707,4 @@ void RGFW_load_Wayland(void) {
 #if _MSC_VER
 	#pragma warning( pop )
 #endif
+
